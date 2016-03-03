@@ -1,4 +1,4 @@
-#include "shttpd.h"
+#include "pool.h"
 
 /*the static function declare*/
 static void * worker_routline(void * arg);
@@ -12,12 +12,12 @@ static void sig_usr1_handler(int signum);
 static float workers_usage();
 static int del_worker(struct Gthread_pool_worker * worker_to_del, struct Gthread_pool * pool);
 
-static struct timeval delay = {0, SLEEP_TIME}; 
-static const float LODE_GATE = 0.2;
+static struct timeval delay = {0, 200000};
+static float LODE_GATE = 0.2;
 
 /*******************************************************
  * name:Gthread_pool_init
- * des:this func will init Gthread_pool struct 
+ * des:this func will init Gthread_pool struct
  * para1: the pointer point to a Gthread_pool struct
  * para2:max number of tasks
  * para3:max number of workers
@@ -32,7 +32,7 @@ int Gthread_pool_init(struct Gthread_pool * pool, int max_tasks, int max_workers
 	pool->min_workers = min_workers;
 	pool->mutex_data.worker_num = pool->min_workers;
 	pool->mutex_data.task_num = 0;
-	
+
 	pthread_mutex_init(&(pool->info_lock), NULL);
 #if DEBUG == 1
 	pthread_mutex_init(&(pool->IO_lock), NULL);
@@ -42,7 +42,7 @@ int Gthread_pool_init(struct Gthread_pool * pool, int max_tasks, int max_workers
 
 	INIT_LIST_HEAD(&(pool->task_list));
 	INIT_LIST_HEAD(&(pool->workers));
-	
+
 	for(int i = 0; i < pool->min_workers; i++)//initial numbers of worker
 	{
 		struct Gthread_pool_worker * tmp = (struct Gthread_pool_worker *)malloc(sizeof(struct Gthread_pool_worker));
@@ -69,7 +69,7 @@ int Gthread_pool_init(struct Gthread_pool * pool, int max_tasks, int max_workers
 int add_task(struct Gthread_pool_task * task, struct Gthread_pool * pool, void * (*proccess)(void * arg), void * arg)
 {
 	assert(task);
-	assert(pool);	
+	assert(pool);
 
 	task->proccess = proccess;
 	task->arg = arg;
@@ -94,9 +94,9 @@ int add_worker(struct Gthread_pool_worker * new_worker, struct Gthread_pool * po
 	new_worker->routline_args.pool = pool;
 	new_worker->routline_args.this_worker = new_worker;
 	pthread_mutex_init(&(new_worker->worker_lock), NULL);
-	pthread_cond_init(&(new_worker->worker_cond), NULL); 
+	pthread_cond_init(&(new_worker->worker_cond), NULL);
 	pthread_mutex_init(&(new_worker->boot_lock), NULL);
-	pthread_cond_init(&(new_worker->boot_cond), NULL); 
+	pthread_cond_init(&(new_worker->boot_cond), NULL);
 
 	pthread_mutex_lock(&(new_worker->boot_lock));
 
@@ -104,7 +104,7 @@ int add_worker(struct Gthread_pool_worker * new_worker, struct Gthread_pool * po
 
 	if(err != 0)
 	  return FAILURE;
-	
+
 	while(new_worker->state == BOOTING)
 		pthread_cond_wait(&(new_worker->boot_cond), &(new_worker->boot_lock));
 	pthread_mutex_unlock(&(new_worker->boot_lock));
@@ -195,25 +195,25 @@ void * distribute_task(void * arg)
 				continue;
 			}
 
-			sem_post(&(pool->surplus_task_num)); //can not proccess this task now, wait for nexit time 
+			sem_post(&(pool->surplus_task_num)); //can not proccess this task now, wait for nexit time
 			select(0, NULL, NULL, NULL, &delay);
 			continue;
 		}
-	}	
+	}
 }
 
 /* ********************************************************************
  *name:search_idle_worker
  *des: search for the worker list, and find a idle worker, the idle worker found will be set busy
  *para:a pointer piont to a Gthread_pool struct
- *return: a pointer piont to a Gthread_pool_worker struct, if none, return NULL 
+ *return: a pointer piont to a Gthread_pool_worker struct, if none, return NULL
  * *******************************************************************/
 struct Gthread_pool_worker * search_idle_worker(struct Gthread_pool * pool)
 {
 	assert(pool);
 	struct list_head * pos;
     struct Gthread_pool_worker * tmp_worker;
-	
+
 	pthread_mutex_lock(&(pool->info_lock));
 	list_for_each(pos, &(pool->workers))
 	{
@@ -245,11 +245,11 @@ void * worker_routline(void * arg)
 	pthread_detach(pthread_self());//worker thread unjoinable
 	struct Gthread_pool * pool = (*((struct Gthread_pool_worker_routline_args *)arg)).pool;
 	struct Gthread_pool_worker * this_worker = (*((struct Gthread_pool_worker_routline_args *)arg)).this_worker;
-	
+
 	sigset_t block_set;
 	sigemptyset(&block_set);
 	sigaddset(&block_set, SIGUSR1);
-	signal(SIGUSR1, sig_usr1_handler);	
+	signal(SIGUSR1, sig_usr1_handler);
 
 
 #if DEBUG == 1
@@ -258,7 +258,7 @@ void * worker_routline(void * arg)
 	printf("Now enter the worker thread: ID %ld\n", pthread_self());
 	pthread_mutex_unlock(&(pool->IO_lock));
 	pthread_sigmask(SIG_UNBLOCK, &block_set, NULL);
-#endif	
+#endif
 	if(this_worker == NULL)
 	{
 #if DEBUG == 1
@@ -272,7 +272,7 @@ void * worker_routline(void * arg)
 	}
 	while(1)
 	{
-		pthread_mutex_lock(&(this_worker->worker_lock));	
+		pthread_mutex_lock(&(this_worker->worker_lock));
 
 		if(this_worker->state == BOOTING)//to confirm a worker has ready to accept task when the function add_worker has been finished
 		{
@@ -289,7 +289,7 @@ void * worker_routline(void * arg)
 		{
 #if DEBUG == 1
 			pthread_mutex_lock(&(pool->IO_lock));
-			printf("the worker thread, id: %ld will eixt!\n",pthread_self()); 
+			printf("the worker thread, id: %ld will eixt!\n",pthread_self());
 			pthread_mutex_unlock(&(pool->IO_lock));
 #endif
 			pthread_mutex_lock(&(pool->info_lock));
@@ -297,7 +297,7 @@ void * worker_routline(void * arg)
 			pthread_mutex_destroy(&(this_worker->worker_lock));
 			pthread_cond_destroy(&(this_worker->boot_cond));
 			pthread_cond_destroy(&(this_worker->worker_cond));
-			
+
 			list_del(&(this_worker->link_node));
 			free(this_worker);
 			pool->mutex_data.worker_num--;
@@ -309,7 +309,7 @@ void * worker_routline(void * arg)
 		pthread_sigmask(SIG_BLOCK, &block_set, NULL);
 		(*(this_worker->worker_task))(this_worker->worker_task_arg);//process the task
 		pthread_sigmask(SIG_UNBLOCK, &block_set, NULL);
-		
+
 		pthread_mutex_lock(&(this_worker->worker_lock));
 		this_worker->state = READY;
 		pthread_mutex_unlock(&(this_worker->worker_lock));
@@ -317,7 +317,7 @@ void * worker_routline(void * arg)
 #if DEBUG == 1
 		pthread_sigmask(SIG_BLOCK, &block_set, NULL);
 		pthread_mutex_lock(&(pool->IO_lock));
-		printf("The worker %ld has finish a task!\n", pthread_self()); 
+		printf("The worker %ld has finish a task!\n", pthread_self());
 		pthread_mutex_unlock(&(pool->IO_lock));
 		pthread_sigmask(SIG_UNBLOCK, &block_set, NULL);
 #endif
@@ -329,14 +329,14 @@ void * worker_routline(void * arg)
 /********************************************************************************
  * name:get_worker_by_id
  * des:find a worker through the thread id
- * para1:thread id 
+ * para1:thread id
  * para2:a pointer point to Gthread pool
  * return: a pointer point to the worker has this id, if can not find, return NULL
  * *****************************************************************************/
 struct Gthread_pool_worker * get_worker_by_id(pthread_t id, struct Gthread_pool * pool)
 {
 	assert(pool);
-	
+
 	struct list_head * pos;
     struct Gthread_pool_worker * tmp_worker;
 
@@ -407,13 +407,13 @@ int del_worker(struct Gthread_pool_worker * worker_to_del, struct Gthread_pool *
 	pthread_cond_destroy(&(worker_to_del->worker_cond));
 #if DEBUG == 1
 	pthread_mutex_lock(&(pool->IO_lock));
-	printf("The worker %ld has been delete!\n", worker_to_del->id); 
+	printf("The worker %ld has been delete!\n", worker_to_del->id);
 	pthread_mutex_unlock(&(pool->IO_lock));
 #endif
-	
+
 	list_del(&(worker_to_del->link_node));
-	return SUCCESS; 
-} 
+	return SUCCESS;
+}
 /***************************************************************************
  * name:sig_usr1_handler
  * des: to handle the sigal SIGUSR1. here this signal will made the thread who capture it exit.
@@ -457,7 +457,7 @@ void * worker_manage(void * arg)
 				free(worker_to_del);
 				pool->mutex_data.worker_num--;
 			}
-			
+
 			list_for_each(pos, &(pool->task_list))//delete all tasks
 			{
 				task_to_del = list_entry(pos, struct Gthread_pool_task, link_node);
@@ -500,7 +500,7 @@ int close_pool(struct Gthread_pool * pool)
 	pool->flag = SHUTDOWN;
 #if DEBUG == 1
 		pthread_mutex_lock(&(pool->IO_lock));
-		printf("The Gthread pool will close!\n"); 
+		printf("The Gthread pool will close!\n");
 		pthread_mutex_unlock(&(pool->IO_lock));
 #endif
 	while(0 == pthread_kill(pool->manage_worker, 0) )//wait the manage thread exit;
@@ -508,13 +508,13 @@ int close_pool(struct Gthread_pool * pool)
 	sem_destroy(&(pool->surplus_task_num));
 	pthread_mutex_destroy(&(pool->IO_lock));
 	pthread_mutex_destroy(&(pool->info_lock));
-	
-	return SUCCESS; 
+
+	return SUCCESS;
 }
 
 /* ***********************************************************************************************************
  *name:add_job
- *description:add a task to this pool 
+ *description:add a task to this pool
  *para1: a pointer point to a pool
  *para2:a pointer point to a fucntion like this: void * (* func)(void * arg)
  *return SUCCESS or FAILURE

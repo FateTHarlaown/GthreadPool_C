@@ -1,5 +1,4 @@
-#include "shttpd.h"
-
+#include "GthreadPool.h"
 pthread_mutex_t fuck;
 /*just for test*/
 void *  test_job(void * arg)
@@ -32,12 +31,12 @@ void  test_request(void * arg)
 }
 
 int main()
-{	
+{
 	struct Gthread_pool test_pool;
 	Gthread_pool_init(&test_pool, 100, 20, 5);
 	test_request(&test_pool);
 	sleep(15);
 	close_pool(&test_pool);
 	while(1);
-	return 0;	
+	return 0;
 }
