@@ -1,16 +1,23 @@
-#ifndef HTTP_POOL
-#define HTTP_POOL
+#ifndef _POOL
+#define _POOL
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
 #include <semaphore.h>
 #include <pthread.h>
 #include <setjmp.h>
 #include "Glist.h"
 #include <signal.h>
-				
+#include <assert.h>
+#include <time.h>
+#include <unistd.h>
+
+#define DEBUG 1
+#define SUCCESS 1
+#define FAILURE -1
 
 /* Gthread pool run flag */
-enum Gthread_pool_flag {RUN, SHUTDOWN}; 
+enum Gthread_pool_flag {RUN, SHUTDOWN};
 
 /*Gthread pool worker stae*/
 enum Gthread_pool_worker_state {BUSY, READY, BOOTING};
@@ -43,7 +50,7 @@ struct Gthread_pool{
  *define task struct in thread pool
  * *******************************/
 struct Gthread_pool_task{
-						 void * (*proccess)(void * arg); 
+						 void * (*proccess)(void * arg);
 						 void * arg;
 						 struct list_head link_node;
 };
